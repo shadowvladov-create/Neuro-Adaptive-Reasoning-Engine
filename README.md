@@ -1,111 +1,286 @@
-# NARE (Non-parametric Amortized Reasoning Evolution)
+# NARE — Neural Amortized Reasoning Engine
 
-![NARE Architecture Diagram](nare_banner.png)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-*Deterministic routing of logic tasks via semantic compression and executable reflexes.*
+**NARE** is an AI reasoning engine that learns from experience. It caches solutions, compiles patterns into reusable skills, and gets faster over time — like a developer who remembers what worked before.
 
-[Читать на русском языке (Read in Russian)](#russian)
+> **Status:** v0.2.0 — Production-ready core, evolving CLI. APIs may shift between minor releases.
 
-NARE is a Skill-Based Cognitive Architecture designed to transition inference-heavy LLM reasoning (System 2) into zero-shot deterministic execution (System 1). The system dynamically learns from its own reasoning trajectories, compiles Python-based abstract algorithms during a consolidation phase, and executes them to solve recurring logical classes with O(1) latency and zero API cost.
+---
 
-## Core Architecture
+## What makes NARE different?
 
-- **Reasoning Amortization**: Shifts computational complexity from auto-regressive LLM generation to local procedural execution.
-- **Executable Reflexes**: Automatically synthesizes and compiles Abstract Syntax Trees (AST) based on consolidated episodic memory to solve recurring logical patterns.
-- **Dynamic 4-Way Routing Protocol**:
-  1. **REFLEX (Execution)**: O(1) procedural execution of crystallized Python skills. Bypasses LLM generation entirely.
-  2. **FAST (Cache)**: Deterministic retrieval of exact-match prior solutions via dense vector similarity.
-  3. **HYBRID (Delta-Reasoning)**: Context-augmented inference leveraging past reasoning traces to solve structurally similar, but novel variants.
-  4. **SLOW (Chain-of-Thought)**: Deep, multi-sample exploratory reasoning evaluated by an internal Elo-based Hybrid Critic.
-- **Fault-Tolerant Skill Registry (Confidence Gating)**: Generated algorithms are evaluated in an isolated execution environment. Runtime exceptions dynamically penalize the skill's confidence scalar, prompting a safe fallback to inference-based reasoning.
+Most AI coding assistants start from scratch every time. NARE **remembers**:
 
-## Cognitive Workflow
+- **Semantic memory** — FAISS-backed cache of past solutions
+- **Compiled skills** — Recurring patterns crystallize into executable code
+- **Adaptive routing** — Cheap cached answers when possible, deep reasoning when needed
+- **Verified synthesis** — Generate → test → critique → retry loop with oracle feedback
 
-1. **Episodic Encoding**: The agent processes a novel stimulus via the SLOW path. Successful reasoning trajectories are embedded and stored in a dense FAISS index.
-2. **Consolidation (Sleep Phase)**: Upon reaching a density threshold of semantically analogous episodes, the agent initiates consolidation. It extracts the underlying heuristic and compiles an abstract Python algorithm (comprising `trigger()` and `execute()` functions).
-3. **Procedural Execution**: Subsequent stimuli matching the consolidated semantic boundary are intercepted by the `trigger()` function. The agent bypasses the neural generation pipeline and invokes the procedural `execute()` function, achieving 100% token conservation.
+Think of it as an AI that builds its own library of solutions as it works.
 
-## Benchmark Metrics
-Empirical evaluation demonstrates the architecture's efficiency in structural logic tasks:
-```text
-Total Tasks: 7
-SLOW Paths: 1 (14.3%)
-HYBRID Paths: 3 (42.9%)
-REFLEX Paths (Executable): 2 (28.6%)
-FAST Paths (Cache): 1 (14.3%)
+---
 
-Speedup via Executable Reflex: Exponential 
-Token Savings on Reflex Tasks: 100% (0 generation tokens used)
+## Architecture
+
 ```
+┌─────────────────────────────────────────────────────────────┐
+│                         Query                                │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+            ┌────────────────┐
+            │  Triage Agent  │  ← Classify intent (QUESTION/EXPLORE/EDIT)
+            └────────┬───────┘
+                     │
+                     ▼
+         ┌───────────────────────┐
+         │   Adaptive Router     │  ← 5-tier decision tree
+         └───────────┬───────────┘
+                     │
+        ┌────────────┼────────────┬────────────┬────────────┐
+        │            │            │            │            │
+        ▼            ▼            ▼            ▼            ▼
+    DIRECT    COMPILED_SKILL   FAST       HYBRID       SLOW
+    (chat)    (cached code)  (FAISS)  (FAISS+delta) (full LLM)
+        │            │            │            │            │
+        └────────────┴────────────┴────────────┴────────────┘
+                                  │
+                                  ▼
+                          ┌───────────────┐
+                          │ Memory System │  ← Episodes + Skills
+                          └───────────────┘
+```
+
+### 5-Tier Routing
+
+| Tier | When | Cost | Example |
+|------|------|------|---------|
+| **DIRECT** | Greetings, meta-questions | ~0 tokens | "привет", "what can you do?" |
+| **COMPILED_SKILL** | Exact pattern match in skills | ~0 tokens | Recurring refactors, known fixes |
+| **FAST** | Cached episode (similarity ≥ 0.85) | ~500 tokens | "fix auth bug" → cached solution |
+| **HYBRID** | Cached + delta reasoning | ~2k tokens | Similar problem, different context |
+| **SLOW** | Full reasoning + verification | ~10k+ tokens | Novel problems, complex edits |
+
+**Key insight:** Most queries hit FAST or HYBRID after a few sessions. SLOW is expensive but teaches the system.
+
+---
+
+## Installation
+
+```bash
+git clone https://github.com/starface77/Neuro-Adaptive-Reasoning-Engine
+cd Neuro-Adaptive-Reasoning-Engine
+pip install -r requirements.txt
+```
+
+**Requirements:**
+- Python 3.10+
+- Anthropic API key (or compatible proxy)
+- Optional: Local embeddings model
+
+---
 
 ## Quick Start
 
+### 1. Configure API
+
 ```bash
-# 1. Clone the repository
-git clone https://github.com/starface77/Neuro-Adaptive-Reasoning-Engine.git
-cd nare
+cp .env.example .env
+# Edit .env:
+ANTHROPIC_API_KEY=your-key-here
+ANTHROPIC_MODEL=claude-sonnet-4-20250514
+```
 
-# 2. Install dependencies
-pip install -r requirements.txt
+**Using a proxy?** (e.g., local LLM gateway)
+```bash
+ANTHROPIC_BASE_URL=http://localhost:20128/v1
+ANTHROPIC_MODEL=kr/claude-sonnet-4.5
+```
 
-# 3. Configure environment
-echo "GEMINI_API_KEY=your_key_here" > .env
+### 2. Launch REPL
 
-# 4. Execute the architectural benchmark
-python benchmarks/metrics_benchmark.py
+```bash
+python -m nare.cli
+```
+
+```
+◆ NARE  reasoning agent for software engineering
+  NareCLI  /home/user/project
+  Manual mode  ·  type /help for commands
+
+> fix the login timeout bug
+```
+
+### 3. One-shot mode
+
+```bash
+python -m nare.cli "add type hints to utils.py"
 ```
 
 ---
 
-<a name="russian"></a>
-# NARE (Непараметрическая Эволюция Амортизированных Рассуждений)
-*Детерминированный роутинг логических задач через семантическое сжатие и исполняемые рефлексы.*
+## CLI Commands
 
-NARE представляет собой когнитивную архитектуру, основанную на навыках, разработанную для перевода вычислительно затратных LLM-рассуждений (System 2) в детерминированное исполнение (System 1). Система динамически обучается на собственных траекториях рассуждений, компилирует абстрактные алгоритмы на Python во время фазы консолидации и выполняет их для решения повторяющихся классов логических задач с задержкой O(1) и нулевыми затратами на API.
+| Command | Description |
+|---------|-------------|
+| `/help` | Show all commands |
+| `/status` | Session stats (tokens, memory, route distribution) |
+| `/repo [path]` | Change working directory |
+| `/files` | List files in context |
+| `/read <path>` | Load file into context |
+| `/clear` | Reset conversation |
+| `/mode` | Cycle: Manual → Research → Autopilot |
+| `/memory` | Inspect cached episodes and skills |
+| `/diff` | Show uncommitted changes |
+| `/commit [msg]` | Git commit with optional message |
+| `/test` | Run project tests |
+| `/bench <n>` | Run SWE-bench on n tasks |
+| `/agent on\|off` | Toggle new agent loop (tool-calling) |
+| `/exit` | Quit |
 
-## Базовая архитектура
+### Autonomy Modes
 
-- **Амортизация рассуждений**: Перенос вычислительной сложности с авторегрессионной генерации LLM на локальное процедурное исполнение.
-- **Исполняемые рефлексы**: Автоматический синтез и компиляция алгоритмов на базе абстрактных синтаксических деревьев (AST) для решения повторяющихся паттернов.
-- **Протокол 4-х фазного роутинга**:
-  1. **REFLEX (Execution)**: O(1) процедурное исполнение кристаллизованных навыков. Полностью обходит этап LLM-генерации.
-  2. **FAST (Cache)**: Детерминированное извлечение точных совпадений через плотное векторное сходство.
-  3. **HYBRID (Delta-Reasoning)**: Контекстно-аугментированный вывод, использующий прошлые траектории рассуждений для решения структурно схожих вариантов задач.
-  4. **SLOW (Chain-of-Thought)**: Глубокое исследовательское рассуждение с многовариантной выборкой и оценкой внутренним турнирным Критиком.
-- **Отказоустойчивый реестр навыков (Confidence Gating)**: Сгенерированные алгоритмы оцениваются в изолированной среде. Исключения во время выполнения (Runtime exceptions) динамически штрафуют показатель уверенности навыка, инициируя безопасный откат к нейросетевым рассуждениям.
+- **Manual** — Confirm every file write and shell command
+- **Deep Research** — Auto-read files, confirm writes
+- **Autopilot** — Full autonomy, only confirms destructive actions
 
-## Когнитивный процесс
+---
 
-1. **Эпизодическое кодирование**: Агент обрабатывает новый стимул через маршрут SLOW. Успешные траектории рассуждений эмбеддятся и сохраняются в векторном индексе FAISS.
-2. **Консолидация (Фаза Сна)**: По достижении порога плотности семантически аналогичных эпизодов агент инициирует консолидацию. Он извлекает базовую эвристику и компилирует абстрактный алгоритм на Python (включающий функции `trigger()` и `execute()`).
-3. **Процедурное исполнение**: Последующие стимулы, попадающие в консолидированную семантическую границу, перехватываются функцией `trigger()`. Агент обходит нейронный конвейер и вызывает процедурную функцию `execute()`, достигая 100% экономии токенов.
+## Programmatic API
 
-## Метрики бенчмарка
-Эмпирическая оценка демонстрирует эффективность архитектуры на задачах структурной логики:
-```text
-Total Tasks: 7
-SLOW Paths: 1 (14.3%)
-HYBRID Paths: 3 (42.9%)
-REFLEX Paths (Executable): 2 (28.6%)
-FAST Paths (Cache): 1 (14.3%)
+```python
+from nare import NAREProductionAgent, DEFAULT_CONFIG
 
-Ускорение за счет Executable Reflex: Экспоненциальное
-Экономия токенов на Reflex-задачах: 100% (потрачено 0 токенов генерации)
+agent = NAREProductionAgent(
+    config=DEFAULT_CONFIG,
+    persist_dir="./.nare_memory",
+    embedding_dim=3072,
+)
+
+# Define oracle for verification
+def oracle(query, answer):
+    expected = "150"
+    return (expected in answer, f"Expected {expected}")
+
+# Solve with verification
+query = "A train travels at 60 km/h for 2.5 hours. How far?"
+result = agent.solve(query, oracle=oracle)
+
+print(result["route_decision"])  # ANALYTIC or SYNTHESIS
+print(result["final_answer"])     # 150
 ```
 
-## Быстрый старт
+### Running SWE-bench
 
 ```bash
-# 1. Клонирование репозитория
-git clone https://github.com/starface77/Neuro-Adaptive-Reasoning-Engine.git
-cd nare
+# Run on 30 tasks
+python benchmarks/swe_bench_official.py --max-tasks 30
 
-# 2. Установка зависимостей
-pip install -r requirements.txt
-
-# 3. Конфигурация окружения
-echo "GEMINI_API_KEY=ваш_ключ" > .env
-
-# 4. Запуск архитектурного бенчмарка
-python benchmarks/metrics_benchmark.py
+# Output: predictions.jsonl (official format)
 ```
+
+---
+
+## Limitations (Honest Section)
+
+### What NARE does well:
+✅ Repetitive refactors (gets faster over time)  
+✅ Bug fixes with clear test cases  
+✅ Code explanation and analysis  
+✅ Incremental edits to existing code  
+
+### What NARE struggles with:
+❌ **Novel problems** — First attempt is slow (SLOW tier)  
+❌ **Ambiguous requirements** — Needs clear oracles  
+❌ **Large refactors** — Context window limits (working on it)  
+❌ **Non-Python code** — Sandbox is Python-only  
+❌ **Security** — Subprocess sandbox, not container-isolated  
+
+### Known issues:
+- File resolution can match wrong files (ambiguous names)
+- Memory grows unbounded (need pruning strategy)
+- No streaming UI for SLOW tier (shows spinner, then dumps result)
+- Research agent incomplete (WebSearch integration TODO)
+
+---
+
+## Roadmap
+
+**v0.3.0** (Next)
+- [ ] Streaming UI for SLOW tier
+- [ ] Memory pruning (LRU + activation decay)
+- [ ] WebSearch integration in research agent
+- [ ] Multi-file refactor support
+- [ ] Docker sandbox (replace subprocess)
+
+**v0.4.0**
+- [ ] Multi-language support (JS, Go, Rust)
+- [ ] Persistent task list (resume interrupted work)
+- [ ] Skill marketplace (share compiled skills)
+- [ ] Web UI (alternative to CLI)
+
+---
+
+## Contributing
+
+PRs welcome! Focus areas:
+- **Oracles** — New oracle types (linters, formatters, etc.)
+- **Skills** — Pre-compiled skills for common tasks
+- **Benchmarks** — More evaluation datasets
+- **Docs** — Tutorials, examples, architecture deep-dives
+
+```bash
+# Run tests
+pytest tests/
+
+# Lint
+ruff check nare/
+
+# Format
+ruff format nare/
+```
+
+---
+
+## FAQ
+
+**Q: How is this different from Cursor/Copilot/Aider?**  
+A: NARE learns from experience. After solving a problem once, it caches the solution and gets faster. Most tools start from scratch every time.
+
+**Q: Do I need a GPU?**  
+A: No. Embeddings can run on CPU (slow) or via API (fast). LLM calls go to Anthropic API.
+
+**Q: Can I use local LLMs?**  
+A: Yes, via proxy. Set `ANTHROPIC_BASE_URL` to your local endpoint (e.g., Ollama, LM Studio).
+
+**Q: Is my code sent to Anthropic?**  
+A: Yes, if you use their API. Use a local proxy if you need privacy.
+
+**Q: How much does it cost?**  
+A: Depends on usage. FAST tier is ~free (cached). SLOW tier is ~$0.10-0.50 per complex task (Claude Sonnet 4).
+
+**Q: Can I run this in production?**  
+A: Core engine: yes. CLI: use at your own risk (subprocess sandbox is not production-grade).
+
+---
+
+## License
+
+MIT — see [`LICENSE`](LICENSE)
+
+---
+
+## Credits
+
+Built by github.com/starface77
+
+Inspired by:
+- [Voyager](https://github.com/MineDojo/Voyager) (skill library learning)
+- [Reflexion](https://arxiv.org/abs/2303.11366) (self-critique loop)
+- [MemGPT](https://github.com/cpacker/MemGPT) (memory management)
+
+---
+
+**Star this repo if you find it useful!** ⭐
