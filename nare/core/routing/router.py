@@ -97,6 +97,16 @@ class ReasoningRouter:
             )
             _solve_tokens += d_tokens
             answer = candidates[0]['solution'] if candidates else "Привет! Чем могу помочь?"
+
+            from ...tools.parsing.executor import ToolExecutor
+            executor = ToolExecutor(working_dir=working_dir)
+            cleaned, modified_files, all_results = executor.parse_and_execute(answer)
+            if all_results:
+                self._render_tool_blocks(all_results, thinking_display)
+                answer = cleaned
+                result_texts = [r.get('result', '') for r in all_results]
+                answer += "\n" + "\n".join(result_texts)
+
             log.append("Route: DIRECT (conversational)")
             return self._wrap_result("DIRECT", answer, [], [], log, 0.0, _solve_start, _solve_tokens,
                                     query=query, chat_history=chat_history, repo_map=repo_map, intent=intent)
@@ -270,8 +280,10 @@ class ReasoningRouter:
                 best = candidates[0]
 
                 from ...tools.parsing.executor import ToolExecutor
-                executor = ToolExecutor(working_dir=".")
-                cleaned_solution, modified_files = executor.parse_and_execute(best['solution'])
+                executor = ToolExecutor(working_dir=working_dir)
+                cleaned_solution, modified_files, all_results = executor.parse_and_execute(best['solution'])
+                if all_results:
+                    self._render_tool_blocks(all_results, thinking_display)
 
                 best['solution'] = cleaned_solution
 
@@ -462,29 +474,26 @@ class ReasoningRouter:
                     elif event_type == 'finish':
                         file_display.finish_writing()
 
-                tool_results = execute_tools_from_response(best['solution'], stream_callback=stream_callback if thinking_display else None, working_dir=working_dir)
+                cleaned_text, modified_files_step, all_results = execute_tools_from_response(best['solution'], stream_callback=stream_callback if thinking_display else None, working_dir=working_dir)
 
-                if tool_results:
-                    log.append(f"Executed {len(tool_results)} tool calls")
+                if all_results:
+                    self._render_tool_blocks(all_results, thinking_display)
+                    log.append(f"Executed {len(all_results)} tool calls")
+
+                    result_texts = [r.get('result', '') for r in all_results]
 
                     import re
-                    solution_clean = best['solution']
-
-                    solution_clean = re.sub(r'<(create_file|edit_file|read_file|list_files)>.*?</\1>', '', solution_clean, flags=re.DOTALL)
-
-                    solution_clean = re.sub(r'(create_file|edit_file|read_file|list_files)\s*\([^)]*\)', '', solution_clean, flags=re.DOTALL)
-
+                    solution_clean = cleaned_text
                     solution_clean = re.sub(r'```[\s\S]*?```', '', solution_clean)
-
                     solution_clean = re.sub(r'\n{3,}', '\n\n', solution_clean).strip()
 
                     if len(solution_clean) > 500:
                         lines = solution_clean.split('\n\n')
                         solution_clean = lines[0] if lines else solution_clean[:200]
 
-                    final_solution_text += "\n\n" + solution_clean + "\n" + "\n".join(tool_results)
+                    final_solution_text += "\n\n" + solution_clean + "\n" + "\n".join(result_texts)
 
-                    current_prompt += f"\n\nASSISTANT (Step {iter_count}):\n{solution_clean}\n\nSYSTEM (Tool Results):\n" + "\n".join(tool_results) + "\n\nContinue executing the plan. If you are finished, summarize your work and DO NOT call any more tools."
+                    current_prompt += f"\n\nASSISTANT (Step {iter_count}):\n{solution_clean}\n\nSYSTEM (Tool Results):\n" + "\n".join(result_texts) + "\n\nContinue executing the plan. If you are finished, summarize your work and DO NOT call any more tools."
 
                     if thinking_display and iter_count < max_auto_iters:
                         thinking_display.print_action(f"| Auto-continuing to step {iter_count + 1}")
@@ -628,6 +637,57 @@ Provide your corrected answer."""
                 return executed
         except: pass
         return raw
+
+    def _render_tool_blocks(self, results, thinking_display=None):
+        """Render Claude Code-style ToolBlock UI for each tool result."""
+        try:
+            from ...cli.display.blocks import (
+                render_read, render_write, render_edit, render_bash,
+                ToolBlock,
+            )
+            from ...cli.display import ui
+            console = ui.console
+
+            if thinking_display:
+                thinking_display._stop_live_and_spinner()
+
+            for r in results:
+                tool = r.get('tool', '')
+                target = r.get('target', '')
+                result_text = r.get('result', '')
+
+                if tool == 'read_file':
+                    render_read(console, target, num_lines=r.get('num_lines'))
+                elif tool == 'write_file':
+                    render_write(console, target, r.get('content', ''))
+                elif tool == 'edit_file':
+                    additions = r.get('additions', 0)
+                    deletions = r.get('deletions', 0)
+                    diff_target = r.get('diff_target', '')
+                    diff_repl = r.get('diff_replacement', '')
+                    diff_text = ""
+                    if diff_target or diff_repl:
+                        for line in diff_target.splitlines():
+                            diff_text += f"-{line}\n"
+                        for line in diff_repl.splitlines():
+                            diff_text += f"+{line}\n"
+                    render_edit(console, target, diff_text, additions=additions, deletions=deletions)
+                elif tool == 'bash_command':
+                    render_bash(console, target, output=result_text, exit_code=r.get('exit_code'))
+                elif tool == 'search':
+                    num_matches = r.get('num_matches', 0)
+                    num_files = r.get('num_files', 0)
+                    ToolBlock("Search", target,
+                              summary=f"{num_matches} matches in {num_files} files",
+                              body=result_text).render(console)
+                elif tool == 'find_files':
+                    num_files = r.get('num_files', 0)
+                    ToolBlock("Find", target,
+                              summary=f"{num_files} files found",
+                              body=result_text).render(console)
+            console.print()
+        except Exception as e:
+            logging.warning(f"[Router] ToolBlock render failed: {e}")
 
     def _propose_for_vs(self, prompt, priors, llm_mod, adaptive_params=None, thinking_display=None):
         adaptive_params = adaptive_params or {}

@@ -74,7 +74,7 @@ class ThinkingDisplay:
             return
 
         if self.mode == "solution":
-            if '<read_file>' in token or '<edit_file>' in token or '<write_file>' in token or '<bash_command>' in token:
+            if '<read_file>' in token or '<edit_file>' in token or '<write_file>' in token or '<bash_command>' in token or '<search>' in token or '<find_files>' in token:
                 self.in_xml_tag = True
                 self.xml_buffer = token
                 return
@@ -82,7 +82,7 @@ class ThinkingDisplay:
             if self.in_xml_tag:
                 self.xml_buffer += token
 
-                if '</read_file>' in self.xml_buffer or '</edit_file>' in self.xml_buffer or '</write_file>' in self.xml_buffer or '</bash_command>' in self.xml_buffer:
+                if '</read_file>' in self.xml_buffer or '</edit_file>' in self.xml_buffer or '</write_file>' in self.xml_buffer or '</bash_command>' in self.xml_buffer or '</search>' in self.xml_buffer or '</find_files>' in self.xml_buffer:
                     self.in_xml_tag = False
                     self.xml_buffer = ""
                 return
